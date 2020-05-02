@@ -1,3 +1,4 @@
+
 #include <mpi.h>
 #include <vector>
 #include <stdlib.h>
@@ -12,52 +13,48 @@ int checkWrongOrder(std::vector<int> vector, int size);
 
 int main(int argc, char** argv) {
 	int rank, size;
-	int sizeVec = 1000;
-	
+	int sizeVec = rand() % 1000 + 100;
+
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	MPI_Status status;
-	  std::vector<int> myVec = getVector(sizeVec);
-      int local_count = 0;
-	  int total_count = 0;
-	  int parEl = sizeVec / size;
-	  int ostEl = sizeVec & size;
+	//	MPI_Status status;
+	int local_count, count = 0;
+	std::vector<int> myVec;
+
+	if (rank == 0) { // пункт 1 создать ОДИН вектор
+		myVec = getVector(sizeVec);
+	};
+      //Пункт 2 разбить 
+	int local_size = sizeVec / size;
+	int tail = sizeVec % size;
+	std::vector<int> locVector(local_size);
+
+	MPI_Scatter(&myVec[0], local_size, MPI_INT, &locVector[0], local_size, MPI_INT, 0, MPI_COMM_WORLD);
 	
+	local_count = checkWrongOrder(locVector, local_size);
+	std::cout << local_count << " First loc cheak  " << std::endl;
 	if (rank == 0) {
-		for (int proc = 1; proc < size; proc++) {
-			MPI_Send(&myVec[ostEl] + proc * parEl, parEl, MPI_INT, proc, 0, MPI_COMM_WORLD);
+		for (int i = 1; i < size; i++) {
+			if (myVec[(local_size * i)] < myVec[local_size * i - 1]) {
+				local_count++;
+			}
 		}
-	}
-	std::vector<int> local_vec(parEl);
+		for (int i = 0; i < tail; i++) {
+			if (myVec[local_size*size + i] < myVec[(local_size*size) + i - 1])
+				local_count++;
+
+		};
+	};
+	//std::cout << local_count << " local cheak" << std::endl;
+	MPI_Reduce(&local_count, &count, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
 	if (rank == 0) {
-		local_vec.resize(parEl + ostEl);
-		local_vec = std::vector<int>(myVec.begin(), myVec.begin() + parEl + ostEl);
+		std::cout << count << " total cheak" << std::endl;
 	}
-	else {
-		MPI_Status status;
-		MPI_Recv(&local_vec[0], parEl, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
-	}
-	
-	if (rank == 0) {
-		local_count += checkWrongOrder(local_vec, local_vec.size());
-		std::vector<int> v(size);
-		for (int n = 1; n < size; n++) {
-			v[n] = myVec[ostEl - 1 + n * parEl];
-			MPI_Send(&v[n], 1, MPI_INT, n, 0, MPI_COMM_WORLD);
-		}
-	}
-	else {
-		int v;
-		MPI_Recv(&v, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
-		local_count += checkWrongOrder(local_vec, local_vec.size());
-		if (v > local_vec[0]) {
-			local_count += 1;
-		}
-	}
-	MPI_Reduce(&local_count, &total_count, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
 
 	MPI_Finalize();
+
+	std::cout << checkWrongOrder(myVec, sizeVec) << " TEST cheak";
 	return 0;
 };
 
@@ -68,21 +65,20 @@ std::vector<int> getVector(int size) {
 	std::vector<int> vec(size);
 	for (int i = 0; i < size; i++) {
 		vec[i] = gen() % 100;
+		std::cout << vec[i] << " ";
 	}
+	std::cout << std::endl;
 	return vec;
 };
 
 
 int checkWrongOrder(std::vector<int> vector, int size) {
 	int count = 0;
-	for ( int c = 1; c < size ; c++) {
+	for (int c = 1; c < size; c++) {
 		if (vector[c] < vector[c - 1]) {
 			count++;
 		}
 	}
 	return count;
 };
-
-
-
 
