@@ -1,84 +1,96 @@
 
-#include <mpi.h>
+#include <iostream>
 #include <vector>
-#include <stdlib.h>
-#include <random>
-#include <ctime>
-#include "iostream"
-//6.Нахождение числа нарушений упорядоченности соседних элементов вектора
-
-std::vector<int> getVector(int size);
-int checkWrongOrder(std::vector<int> vector, int size);
 
 
-int main(int argc, char** argv) {
-	int rank, size;
-	int sizeVec = rand() % 1000 + 100;
+class point {
+public:
+	int x;
+	int y;
 
-	MPI_Init(&argc, &argv);
-	MPI_Comm_size(MPI_COMM_WORLD, &size);
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	//	MPI_Status status;
-	int local_count, count = 0;
-	std::vector<int> myVec;
-
-	if (rank == 0) { // пункт 1 создать ОДИН вектор
-		myVec = getVector(sizeVec);
+	point() {
+		x = 0;
+		y = 0;
 	};
-      //Пункт 2 разбить 
-	int local_size = sizeVec / size;
-	int tail = sizeVec % size;
-	std::vector<int> locVector(local_size);
+	point(int _x, int _y) {
+		x = _x;
+		y = _y;
+	};
+    
+	void pr(){
+		std::cout << x << " " << y << std::endl;
+		
+	};
 
-	MPI_Scatter(&myVec[0], local_size, MPI_INT, &locVector[0], local_size, MPI_INT, 0, MPI_COMM_WORLD);
+	point& operator=(const point& right) {
+		if (this == &right) {
+			return *this;
+		}
+		x = right.x;
+		y = right.y;
+		return *this;
+	}
+
+	~point(void) {
+		x = 0;
+		y = 0;
+	};
+};
+
+bool rotate(point a, point b, point c);
+
+int main() {
+	int n = 10;
+//создание точек
+	point *allPoint = new point[n];
+	for (int i = 0; i < n; i++) {
+		allPoint[i] = point(rand() % 10 +1, rand() % 10 +1) ;
+	};
+
+ // обход грехэма 
+	//1 найти нижнюю левую точку, непосредственно входящую в МВО
+	for (int i = 1; i < n; i++) {
+		if ((allPoint[0].x > allPoint[i].x) || (allPoint[0].x == allPoint[i].x) && (allPoint[0].y > allPoint[i].y)) {
+			std::swap(allPoint[0], allPoint[i]);
+		}
+	  }
+   //2 отсортировать по полярному углу
+	for (int i = 0, j; i < n; i++) {
+		j = i;
+		while (j>1 && rotate(allPoint[0], allPoint[j - 1], allPoint[j]))
+		{
+			std::swap(allPoint[j], allPoint[j - 1]);
+			j--;
+		}
+	}
+	for (int i = 0; i< n; i++) {
+		allPoint[i].pr();
+	};
+	std::cout << "Polar sort" << std::endl;
+	//3 определить левый поворот и построение мво
+	std::vector<point> vipykl;
 	
-	local_count = checkWrongOrder(locVector, local_size);
-	std::cout << local_count << " First loc cheak  " << std::endl;
-	if (rank == 0) {
-		for (int i = 1; i < size; i++) {
-			if (myVec[(local_size * i)] < myVec[local_size * i - 1]) {
-				local_count++;
-			}
+	for (int i = 0 , j = 0; i < n; i++) {
+		while (vipykl.size() >= 2 && rotate(vipykl[j - 2], vipykl[j - 1], allPoint[i])) {
+			vipykl.pop_back();
+			j--;
 		}
-		for (int i = 0; i < tail; i++) {
-			if (myVec[local_size*size + i] < myVec[(local_size*size) + i - 1])
-				local_count++;
-
-		};
+		vipykl.push_back(allPoint[i]);
+		j++;
 	};
-	//std::cout << local_count << " local cheak" << std::endl;
-	MPI_Reduce(&local_count, &count, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
-	if (rank == 0) {
-		std::cout << count << " total cheak" << std::endl;
+
+	for (int i = 0; i < vipykl.size(); i++) {
+		vipykl[i].pr();
 	}
-
-	MPI_Finalize();
-
-	std::cout << checkWrongOrder(myVec, sizeVec) << " TEST cheak";
+	
+ 	std::cout << "vipukl is done" << std::endl;
+	 system("pause");
 	return 0;
+
 };
 
 
-std::vector<int> getVector(int size) {
-	std::mt19937 gen;
-	gen.seed(static_cast<unsigned int>(time(0)));
-	std::vector<int> vec(size);
-	for (int i = 0; i < size; i++) {
-		vec[i] = gen() % 100;
-		std::cout << vec[i] << " ";
-	}
-	std::cout << std::endl;
-	return vec;
+bool rotate(point a, point b, point c) {
+	if ((b.x - a.x)*(c.y - b.y) - (b.y - a.y)*(c.x - b.x) < 0) return true;
+	return false;
 };
-
-
-int checkWrongOrder(std::vector<int> vector, int size) {
-	int count = 0;
-	for (int c = 1; c < size; c++) {
-		if (vector[c] < vector[c - 1]) {
-			count++;
-		}
-	}
-	return count;
-};
-
